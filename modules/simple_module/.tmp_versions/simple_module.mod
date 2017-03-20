@@ -1,3 +1,3 @@
-/home/student/przyklady/modules/simple_module/simple_module.ko
-/home/student/przyklady/modules/simple_module/simple_module.o
+/home/student/ps/modules/simple_module/simple_module.ko
+/home/student/ps/modules/simple_module/simple_module.o
 

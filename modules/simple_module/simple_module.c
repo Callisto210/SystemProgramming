@@ -8,9 +8,10 @@
 #include <linux/uaccess.h>
 
 MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Patryk Duda");
 
-#define MYBUF_SIZE 100
-#define SIMPLE_MAJOR 199
+#define MYBUF_SIZE 20
+#define CIRCULAR_MAJOR 199
 
 const char * const text = "SIMPLE. Read calls: %zu, Write calls: %zu\n";
 
@@ -20,30 +21,30 @@ char *mybuf;
 bool copied;
 struct proc_dir_entry *proc_entry;
 
-/* Operations for /dev/simple */
-const struct file_operations simple_fops;
+/* Operations for /dev/circular */
+const struct file_operations circular_fops;
 
-/* Operations for /proc/simple */
+/* Operations for /proc/circular */
 const struct file_operations proc_fops;
 
 
-static int __init simple_init(void)
+static int __init circular_init(void)
 {
 	int result = 0;
 
 	/* Register an entry in /proc */
-	proc_entry = proc_create("simple", 0000, NULL, &proc_fops);
+	proc_entry = proc_create("circular", 0000, NULL, &proc_fops);
 	if (!proc_entry) {
-		printk(KERN_WARNING "Cannot create /proc/simple\n");
+		printk(KERN_WARNING "Cannot create /proc/circular\n");
 		goto err;
 	}
 
 	/* Register a device with the given major number */
-	result = register_chrdev(SIMPLE_MAJOR, "simple", &simple_fops);
+	result = register_chrdev(CIRCULAR_MAJOR, "circular", &circular_fops);
 	if (result < 0) {
 		printk(KERN_WARNING
-			"Cannot register the /dev/simple device with major number: %d\n",
-			SIMPLE_MAJOR);
+			"Cannot register the /dev/circular device with major number: %d\n",
+			CIRCULAR_MAJOR);
 		goto err;
 	}
 
@@ -52,9 +53,12 @@ static int __init simple_init(void)
 		result = -ENOMEM;
 		goto err;
 	} else {
-		mybuf[0] = '\0';
+		int i;
+		for (i = 0; i < MYBUF_SIZE; i++) {
+			mybuf[i] = '\0';
+		}
 		result = 0;
-		printk(KERN_INFO "The SIMPLE module has been inserted.\n");
+		printk(KERN_INFO "The CIRCULAR module has been inserted.\n");
 	}
 	return result;
 
@@ -62,15 +66,15 @@ err:
 	if (proc_entry) {
 		proc_remove(proc_entry);
 	}
-	unregister_chrdev(SIMPLE_MAJOR, "simple");
+	unregister_chrdev(CIRCULAR_MAJOR, "circular");
 	kfree(mybuf);
 	return result;
 }
 
-static void __exit simple_exit(void)
+static void __exit circular_exit(void)
 {
 	/* Unregister the device and /proc entry */
-	unregister_chrdev(SIMPLE_MAJOR, "simple");
+	unregister_chrdev(CIRCULAR_MAJOR, "circular");
 	if (proc_entry) {
 		proc_remove(proc_entry);
 	}
@@ -78,22 +82,22 @@ static void __exit simple_exit(void)
 	/* Free the buffer. No need to check for NULL - read kfree docs */
 	kfree(mybuf);
 
-	printk(KERN_INFO "The SIMPLE module has been removed\n");
+	printk(KERN_INFO "The CIRCULAR module has been removed\n");
 }
 
-ssize_t simple_read(struct file *filp, char __user *user_buf,
+ssize_t circular_read(struct file *filp, char __user *user_buf,
 	size_t count, loff_t *f_pos)
 {
 	size_t to_copy = strlen(mybuf);
 
-	printk(KERN_WARNING "SIMPLE: read f_pos is %lld\n", *f_pos);
+	printk(KERN_WARNING "CIRCULAR: read f_pos is %lld\n", *f_pos);
 
 	if (*f_pos >= to_copy) {
 		return 0;
 	}
 
 	if (copy_to_user(user_buf, mybuf, to_copy)) {
-		printk(KERN_WARNING "SIMPLE: could not copy data to user\n");
+		printk(KERN_WARNING "CIRCULAR: could not copy data to user\n");
 		return -EFAULT;
 	}
 	read_count++;
@@ -102,29 +106,31 @@ ssize_t simple_read(struct file *filp, char __user *user_buf,
 	return to_copy;
 }
 
-ssize_t simple_write(struct file *filp, const char __user *user_buf,
+ssize_t circular_write(struct file *filp, const char __user *user_buf,
 	size_t count, loff_t *f_pos)
 {
-	printk(KERN_WARNING "SIMPLE: write f_pos is %lld\n", *f_pos);
-
-	// Cannot write more than buffer size (+ '\0')
-	if (*f_pos >= MYBUF_SIZE - 1) {
-		return -ENOSPC;
+	int written = 0;
+	int to_write = count;
+	printk(KERN_WARNING "CIRCULAR: write f_pos is %lld\n", *f_pos);
+	
+	while (to_write > 0) {
+		if (*f_pos + count > MYBUF_SIZE - 1) {
+			count = MYBUF_SIZE - 1 - *f_pos;
+		}
+		if (copy_from_user(mybuf + *f_pos, user_buf, count)) {
+			printk(KERN_WARNING "CIRCULAR: could not copy data from user\n");
+			return -EFAULT;
+		}
+		to_write -= count;
+		written += count;
+		*f_pos = (*f_pos + count) % MYBUF_SIZE - 1;
 	}
-	if (*f_pos + count > MYBUF_SIZE - 1) {
-		count = MYBUF_SIZE - 1 - *f_pos;
-	}
-	if (copy_from_user(mybuf + *f_pos, user_buf, count)) {
-		printk(KERN_WARNING "SIMPLE: could not copy data from user\n");
-		return -EFAULT;
-	}
-	mybuf[count] = '\0';
 	write_count++;
-	*f_pos += count;
-	return count;
+	
+	return written;
 }
 
-ssize_t simple_read_proc(struct file *filp, char *user_buf,
+ssize_t circular_read_proc(struct file *filp, char *user_buf,
 	size_t count, loff_t *f_pos)
 {
 	char *buf;
@@ -145,7 +151,7 @@ ssize_t simple_read_proc(struct file *filp, char *user_buf,
 		}
 
 		if (copy_to_user(user_buf, buf, length)) {
-			printk(KERN_WARNING "SIMPLE: could not copy data to user\n");
+			printk(KERN_WARNING "CIRCULAR: could not copy data to user\n");
 			retval = -EFAULT;
 			goto out;
 		}
@@ -161,15 +167,15 @@ out:
 	return retval;
 }
 
-const struct file_operations simple_fops = {
-	.read = simple_read,
-	.write = simple_write,
+const struct file_operations circular_fops = {
+	.read = circular_read,
+	.write = circular_write,
 };
 
 const struct file_operations proc_fops = {
-	.read = simple_read_proc,
+	.read = circular_read_proc,
 };
 
-module_init(simple_init);
-module_exit(simple_exit);
+module_init(circular_init);
+module_exit(circular_exit);
 
