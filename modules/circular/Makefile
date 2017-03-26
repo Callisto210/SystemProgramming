@@ -1,4 +1,4 @@
-obj-m := simple_module.o
+obj-m := circular.o
 
 KDIR  := /lib/modules/$(shell uname -r)/build
 PWD   := $(shell pwd)

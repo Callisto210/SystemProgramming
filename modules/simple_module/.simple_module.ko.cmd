@@ -1,1 +1,0 @@
-cmd_/home/student/ps/modules/simple_module/simple_module.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/student/ps/modules/simple_module/simple_module.ko /home/student/ps/modules/simple_module/simple_module.o /home/student/ps/modules/simple_module/simple_module.mod.o ;  true

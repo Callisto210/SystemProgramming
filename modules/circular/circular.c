@@ -6,22 +6,32 @@
 #include <linux/proc_fs.h>
 #include <linux/fcntl.h>
 #include <linux/uaccess.h>
+#include <linux/miscdevice.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Patryk Duda");
 
-#define MYBUF_SIZE 20
+#define MYBUF_SIZE 40
 #define CIRCULAR_MAJOR 199
 
 char *mybuf;
-char *position; //To keep position between read calls
+char *position; //To keep position between write calls
 static size_t tab_size;
+static size_t tab_fill;
 
 struct proc_dir_entry *proc_entry;
 static char proc_buff[10];
 
 const struct file_operations circular_fops;
 const struct file_operations proc_fops;
+
+struct miscdevice device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "circular",
+	.fops = &circular_fops,
+	.mode = 0600,
+}; 
+
 
 
 static int __init circular_init(void)
@@ -36,23 +46,25 @@ static int __init circular_init(void)
 	}
 
 	/* Register a device with the given major number */
-	result = register_chrdev(CIRCULAR_MAJOR, "circular", &circular_fops);
+	result = misc_register(&device);
 	if (result < 0) {
-		printk(KERN_WARNING
-			"Cannot register the /dev/circular device with major number: %d\n",
-			CIRCULAR_MAJOR);
+		printk(KERN_WARNING "Cannot register the /dev/circular miscdevice");
 		goto err;
 	}
 
 	mybuf = kmalloc(MYBUF_SIZE, GFP_KERNEL);
+	position = mybuf;
+	tab_size = MYBUF_SIZE;
+	tab_fill = 0;
 	if (!mybuf) {
 		result = -ENOMEM;
 		goto err;
 	} else {
-		int i;
+	/*	int i;
 		for (i = 0; i < MYBUF_SIZE; i++) {
 			mybuf[i] = '\0';
-		}
+		}*/
+		mybuf[0] = '\0';
 		result = 0;
 		printk(KERN_INFO "The CIRCULAR module has been inserted.\n");
 	}
@@ -62,7 +74,7 @@ err:
 	if (proc_entry) {
 		proc_remove(proc_entry);
 	}
-	unregister_chrdev(CIRCULAR_MAJOR, "circular");
+	misc_deregister(&device);
 	kfree(mybuf);
 	return result;
 }
@@ -70,7 +82,7 @@ err:
 static void __exit circular_exit(void)
 {
 	/* Unregister the device and /proc entry */
-	unregister_chrdev(CIRCULAR_MAJOR, "circular");
+	misc_deregister(&device);
 	if (proc_entry) {
 		proc_remove(proc_entry);
 	}
@@ -84,32 +96,30 @@ static void __exit circular_exit(void)
 ssize_t circular_read(struct file *filp, char __user *user_buf,
 	size_t count, loff_t *f_pos)
 {
-	size_t tab_left = tab_size - *f_pos;
+	size_t tab_left = tab_fill - *f_pos;
 	size_t to_cpy = (count > tab_left) ? tab_left : count;
 
 	printk(KERN_WARNING "CIRCULAR: read f_pos is %lld\n", *f_pos);
 	
-	if( _copy_to_user(user_buf, position, to_cpy) != 0) {
+	if( _copy_to_user(user_buf, mybuf, to_cpy) != 0) {
 		printk(KERN_WARNING "CIRCULAR: could not copy data to user\n");
-		return -EPERM;
+		return -EFAULT;
 	}
 		
 	*f_pos += to_cpy;
-	position += to_cpy;
 	return to_cpy;
 }
 
 ssize_t circular_write(struct file *filp, const char __user *user_buf,
 	size_t count, loff_t *f_pos)
 {
-	size_t tab_left = tab_size - (position - mybuf);
-	size_t to_cpy = (count > tab_left) ? tab_left : count;
-	printk(KERN_WARNING "CIRCULAR: write f_pos is %lld\n", *f_pos);
-	
+	size_t tab_left = (tab_size) - (position - mybuf);
 	if(tab_left <= 0) {
-		position = mybuf
-		return -EAGAIN;
+		position = mybuf;
+		tab_left = tab_size;
 	}
+	size_t to_cpy = (count > tab_left) ? tab_left : count;
+	printk(KERN_WARNING "CIRCULAR: write position is %d\n", position - mybuf);
 
 	if( _copy_from_user(position, user_buf, to_cpy) != 0) {
 		printk(KERN_WARNING "CIRCULAR: could not copy data from user\n");
@@ -118,6 +128,11 @@ ssize_t circular_write(struct file *filp, const char __user *user_buf,
 		
 	*f_pos += to_cpy;
 	position += to_cpy;
+	
+	if (position - mybuf > tab_fill)
+		tab_fill = position - mybuf;
+	printk(KERN_WARNING "CIRCULAR: tab_fill is %d\n", tab_fill);
+	
 	return to_cpy;
 }
 
@@ -126,7 +141,12 @@ static ssize_t circular_write_proc(struct file *file, const char __user
 {
 	size_t new_tab_size;
 	char *tmp_tab;
+	size_t pos = position - mybuf;
 	
+	int i;
+	for (i = 0; i< 10; i++)
+		proc_buff[i] = '\0';
+		
 	if(length >= 10) return -ENOSPC;
 	if( _copy_from_user(proc_buff, buffer, length) != 0) return -EFAULT;
 		
@@ -139,8 +159,12 @@ static ssize_t circular_write_proc(struct file *file, const char __user
 		return -ENOMEM;
 	}
 	
-	tab_size = ksize(tmp_tab); //Niekoniecznie moglismy dostac tyle ile chcielismy
+	tab_size = new_tab_size;
 	mybuf = tmp_tab;
+	position = pos < tab_size ? mybuf + pos : mybuf;
+	tab_fill = tab_fill < tab_size ? tab_fill : tab_size;
+		
+	mybuf[tab_fill] = '\0';
 
 	printk(KERN_INFO "CIRCULAR: allocated %d bytes of memory\n", tab_size);
 
