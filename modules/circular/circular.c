@@ -60,10 +60,6 @@ static int __init circular_init(void)
 		result = -ENOMEM;
 		goto err;
 	} else {
-	/*	int i;
-		for (i = 0; i < MYBUF_SIZE; i++) {
-			mybuf[i] = '\0';
-		}*/
 		mybuf[0] = '\0';
 		result = 0;
 		printk(KERN_INFO "The CIRCULAR module has been inserted.\n");
@@ -114,10 +110,6 @@ ssize_t circular_write(struct file *filp, const char __user *user_buf,
 	size_t count, loff_t *f_pos)
 {
 	size_t tab_left = (tab_size) - (position - mybuf);
-	if(tab_left <= 0) {
-		position = mybuf;
-		tab_left = tab_size;
-	}
 	size_t to_cpy = (count > tab_left) ? tab_left : count;
 	printk(KERN_WARNING "CIRCULAR: write position is %d\n", position - mybuf);
 
@@ -132,6 +124,9 @@ ssize_t circular_write(struct file *filp, const char __user *user_buf,
 	if (position - mybuf > tab_fill)
 		tab_fill = position - mybuf;
 	printk(KERN_WARNING "CIRCULAR: tab_fill is %d\n", tab_fill);
+	
+	if (mybuf + tab_size <= position)
+		position = mybuf;
 	
 	return to_cpy;
 }
