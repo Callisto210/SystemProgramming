@@ -12,6 +12,15 @@
 #include <linux/pid.h>
 #include <linux/pid_namespace.h>
 
+//For jiffies
+#include <linux/jiffies.h>
+
+//For mountderef
+#include <linux/mount.h>
+#include <linux/namei.h>
+#include <linux/dcache.h>
+#include <linux/path.h>
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Patryk Duda");
 MODULE_DESCRIPTION("Advanced Module");
@@ -100,16 +109,77 @@ ssize_t prname_write(struct file *filp, const char __user *user_buf,
 ssize_t jiffies_read(struct file *filp, char __user *user_buf,
 	size_t count, loff_t *f_pos)
 {
-}
+	char jiffies_buffer[101];
+	size_t len, to_cpy;
+	u64 jiffies = get_jiffies_64();
 	
+	len = snprintf(jiffies_buffer, 100, "%llu\n", jiffies);
+	to_cpy = (count > len) ? len : count;
+	
+	if( _copy_to_user(user_buf, jiffies_buffer, to_cpy) != 0) {
+		return -EFAULT;
+	}
+	
+	return to_cpy;
+}
+
+int writeUsedAtLeastOnce = 0;
+char mount_name[100];
+
 ssize_t mountderef_read(struct file *filp, char __user *user_buf,
 	size_t count, loff_t *f_pos)
 {
+	size_t str_length = strlen(mount_name) - *f_pos;
+	size_t to_cpy = (count > str_length) ? str_length : count;
+	
+	if (!writeUsedAtLeastOnce)
+		return -ENODATA;
+		
+	if( _copy_to_user(user_buf, mount_name + *f_pos, to_cpy) != 0) {
+		return -EFAULT;
+	}
+	
+	*f_pos += to_cpy;
+	return to_cpy;
+	
 }
 	
 ssize_t mountderef_write(struct file *filp, const char __user *user_buf,
 	size_t count, loff_t *f_pos)
 {
+	int result;
+	int i;
+	char mountderef_buffer[100];
+	struct path path;
+	
+	writeUsedAtLeastOnce = 1;
+		
+	for (i = 0; i< 100; i++)
+		mountderef_buffer[i] = '\0';
+		
+	if(count >= 100) return -ENOSPC;
+	if( _copy_from_user(mountderef_buffer, user_buf, count) != 0)
+		return -EFAULT;
+	
+	//get path structure from name
+	if((result = user_path(user_buf, &path)) == 0) {
+		printk(KERN_WARNING "user_path failed");
+		return -ENOENT;
+	}
+	
+	//follow up to mountpoint
+	follow_up(&path);
+	
+	
+	/*follow_up returns mountpoint path struct,
+	 * path has pointer to vfsmount structure named mnt,
+	 * vfsmount has pointer struct dentry *mnt_root
+	 * get path from dentry struct with dentry_path_raw
+	 */
+	dentry_path_raw(path.mnt->mnt_root, mount_name, 100);
+	
+	return count;
+	
 }
 
 module_init(advanced_init);
