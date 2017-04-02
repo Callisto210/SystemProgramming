@@ -33,7 +33,7 @@ static int __init advanced_init(void)
 	
 	int result, i;
 	for (i = 0; i < 3; i++)
-		if ((result = misc_register(&device[i])) < 0) {
+		if ((result = misc_register(&(device[i]))) < 0) {
 			printk(KERN_WARNING "Cannot register the /dev/%s miscdevice", device[i].name);
 			goto err;
 		}
@@ -43,15 +43,15 @@ static int __init advanced_init(void)
 	
 	err:
 		for (i = 0; i < 3; i++)
-			misc_deregister(&device[i]);
+			misc_deregister(&(device[i]));
 		return result;
 }
 
-static void __init advanced_exit(void)
+static void __exit advanced_exit(void)
 {
 	int i;
 	for (i = 0; i < 3; i++)
-			misc_deregister(&device[i]);
+			misc_deregister(&(device[i]));
 			
 	printk(KERN_INFO "The ADVANCED module has been removed\n");
 	return;
