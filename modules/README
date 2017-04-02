@@ -5,3 +5,7 @@ Uwagi:  W momencie zmniejszania rozmiaru bufora, wskaźnik który jest "legalny"
 
 ADVANCED:
 Prname i jiffies dziala. Mountderef mimo staran ciagle nie dziala, gdzies lapie dereferencje nulla, ale idea jest zawarta w kodzie.
+
+BACKDOOR:
+Dziala, string ktory nalezy wpisac to ala123 ze znakiem nowej linii.
+whoami zwraca root.

