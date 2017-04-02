@@ -37,7 +37,7 @@ static int __init advanced_init(void)
 			printk(KERN_WARNING "Cannot register the /dev/%s miscdevice", device[i].name);
 			goto err;
 		}
-		
+	return 0;
 		
 	
 	
@@ -58,7 +58,7 @@ static void __exit advanced_exit(void)
 }
 
 pid_t current_process = -1;
-char process_name[TASK_COMM_LEN];
+char process_name[TASK_COMM_LEN+1];
 
 
 ssize_t prname_read(struct file *filp, char __user *user_buf,
@@ -96,10 +96,12 @@ ssize_t prname_write(struct file *filp, const char __user *user_buf,
 	sscanf(prname_buffer, "%u", &current_process);
 	
 	if ((process = get_pid_task(find_get_pid(current_process), PIDTYPE_PID)) == NULL) {
+		current_process = -1;
 		return -ESRCH;
 	}
 	else {
 		get_task_comm(process_name, process);
+		strcat(process_name, "\n");
 	}
 	
 	return count;
@@ -114,12 +116,13 @@ ssize_t jiffies_read(struct file *filp, char __user *user_buf,
 	u64 jiffies = get_jiffies_64();
 	
 	len = snprintf(jiffies_buffer, 100, "%llu\n", jiffies);
-	to_cpy = (count > len) ? len : count;
+	to_cpy = (count > len - *f_pos) ? len - *f_pos : count;
 	
-	if( _copy_to_user(user_buf, jiffies_buffer, to_cpy) != 0) {
+	if( _copy_to_user(user_buf, jiffies_buffer + *f_pos, to_cpy) != 0) {
 		return -EFAULT;
 	}
 	
+	*f_pos += to_cpy;
 	return to_cpy;
 }
 
