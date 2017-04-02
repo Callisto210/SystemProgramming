@@ -2,3 +2,6 @@ CIRCULAR - zadanie rozwiązane!
 Uwagi:  W momencie zmniejszania rozmiaru bufora, wskaźnik który jest "legalny" w starym buforze,
 	a będzie "nielegalny" w nowym (bo bufor będzie tak mały, że wskaźnik byłby poza nim),
 	jest przesuwany na początek nowego bufora. Jest to specyficzny przypadek nie opisany w treści zadania.
+
+ADVANCED:
+Prname i jiffies dziala. Mountderef mimo staran ciagle nie dziala, gdzies lapie dereferencje nulla, ale idea jest zawarta w kodzie.

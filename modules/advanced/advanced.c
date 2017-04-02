@@ -153,7 +153,7 @@ ssize_t mountderef_write(struct file *filp, const char __user *user_buf,
 	int result;
 	int i;
 	char mountderef_buffer[100];
-	struct path path;
+	struct path *path = kmalloc(sizeof(struct path), GFP_KERNEL);
 	
 	writeUsedAtLeastOnce = 1;
 		
@@ -164,23 +164,30 @@ ssize_t mountderef_write(struct file *filp, const char __user *user_buf,
 	if( _copy_from_user(mountderef_buffer, user_buf, count) != 0)
 		return -EFAULT;
 	
+
 	//get path structure from name
-	if((result = user_path(user_buf, &path)) == 0) {
+	//Ponizszy kod jest zbugowany, podpowiem, ze problemem jest besposrednie podawanie
+	//wskaznika na obszar uzytkownika
+	if((result = user_path_at(0, user_buf, LOOKUP_ROOT | LOOKUP_EMPTY, path)) != 0) {
 		printk(KERN_WARNING "user_path failed");
-		return -ENOENT;
+		//return -ENOENT;
+		return result;
 	}
-	
+
+	//Ponizsze bylo w ramach testu
+/*
+	if((result = kern_path(mountderef_buffer, LOOKUP_ROOT | LOOKUP_EMPTY, path)) != 0) {
+		printk(KERN_WARNING "user_path failed");
+		//return -ENOENT;
+		return result;
+	}
+*/
+
 	//follow up to mountpoint
-	follow_up(&path);
+	follow_up(path);
 	
-	
-	/*follow_up returns mountpoint path struct,
-	 * path has pointer to vfsmount structure named mnt,
-	 * vfsmount has pointer struct dentry *mnt_root
-	 * get path from dentry struct with dentry_path_raw
-	 */
-	dentry_path_raw(path.mnt->mnt_root, mount_name, 100);
-	
+	d_path(path, mount_name, 100);
+
 	return count;
 	
 }
@@ -207,19 +214,19 @@ struct miscdevice device[] = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "prname",
 	.fops = &advanced_fops[0],
-	.mode = 0600,
+	.mode = 0666,
 	},
 	{
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "jiffies",
 	.fops = &advanced_fops[1],
-	.mode = 0600,
+	.mode = 0666,
 	},
 	{
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "mountderef",
 	.fops = &advanced_fops[2],
-	.mode = 0600,
+	.mode = 0666,
 	}
 };
 

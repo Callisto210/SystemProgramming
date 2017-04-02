@@ -111,7 +111,7 @@ ssize_t circular_write(struct file *filp, const char __user *user_buf,
 {
 	size_t tab_left = (tab_size) - (position - mybuf);
 	size_t to_cpy = (count > tab_left) ? tab_left : count;
-	printk(KERN_WARNING "CIRCULAR: write position is %d\n", position - mybuf);
+	printk(KERN_WARNING "CIRCULAR: write position is %ld\n", position - mybuf);
 
 	if( _copy_from_user(position, user_buf, to_cpy) != 0) {
 		printk(KERN_WARNING "CIRCULAR: could not copy data from user\n");
@@ -123,7 +123,7 @@ ssize_t circular_write(struct file *filp, const char __user *user_buf,
 	
 	if (position - mybuf > tab_fill)
 		tab_fill = position - mybuf;
-	printk(KERN_WARNING "CIRCULAR: tab_fill is %d\n", tab_fill);
+	printk(KERN_WARNING "CIRCULAR: tab_fill is %ld\n", tab_fill);
 	
 	if (mybuf + tab_size <= position)
 		position = mybuf;
@@ -145,9 +145,9 @@ static ssize_t circular_write_proc(struct file *file, const char __user
 	if(length >= 10) return -ENOSPC;
 	if( _copy_from_user(proc_buff, buffer, length) != 0) return -EFAULT;
 		
-	sscanf(proc_buff, "%u", &new_tab_size);
+	sscanf(proc_buff, "%lu", &new_tab_size);
 	
-	printk(KERN_INFO "CIRCULAR: new_tab_size %d bytes\n", new_tab_size);
+	printk(KERN_INFO "CIRCULAR: new_tab_size %ld bytes\n", new_tab_size);
 	
 	if((tmp_tab = krealloc(mybuf, new_tab_size, GFP_KERNEL)) == NULL) {
 		printk(KERN_ALERT "CIRCULAR: can't get ram\n");
@@ -161,7 +161,7 @@ static ssize_t circular_write_proc(struct file *file, const char __user
 		
 	mybuf[tab_fill] = '\0';
 
-	printk(KERN_INFO "CIRCULAR: allocated %d bytes of memory\n", tab_size);
+	printk(KERN_INFO "CIRCULAR: allocated %lu bytes of memory\n", tab_size);
 
 	return length;
 }
