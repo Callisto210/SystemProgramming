@@ -154,8 +154,6 @@ ssize_t mountderef_write(struct file *filp, const char __user *user_buf,
 	int i;
 	char mountderef_buffer[100];
 	struct path *path = kmalloc(sizeof(struct path), GFP_KERNEL);
-	
-	writeUsedAtLeastOnce = 1;
 		
 	for (i = 0; i< 100; i++)
 		mountderef_buffer[i] = '\0';
@@ -168,25 +166,25 @@ ssize_t mountderef_write(struct file *filp, const char __user *user_buf,
 	//get path structure from name
 	//Ponizszy kod jest zbugowany, podpowiem, ze problemem jest besposrednie podawanie
 	//wskaznika na obszar uzytkownika
-	if((result = user_path_at(0, user_buf, LOOKUP_ROOT | LOOKUP_EMPTY, path)) != 0) {
+	/*if((result = user_path_at(0, user_buf, LOOKUP_ROOT | LOOKUP_EMPTY, path)) != 0) {
 		printk(KERN_WARNING "user_path failed");
+		//return -ENOENT;
+		return result;
+	}*/
+
+
+	if((result = kern_path(mountderef_buffer, LOOKUP_FOLLOW, path)) != 0) {
+		printk(KERN_WARNING "kern_path failed");
 		//return -ENOENT;
 		return result;
 	}
 
-	//Ponizsze bylo w ramach testu
-/*
-	if((result = kern_path(mountderef_buffer, LOOKUP_ROOT | LOOKUP_EMPTY, path)) != 0) {
-		printk(KERN_WARNING "user_path failed");
-		//return -ENOENT;
-		return result;
-	}
-*/
 
 	//follow up to mountpoint
-	follow_up(path);
+	follow_up(path); //to zwraca albo 0 jak jesteśmy w korzeniu, albo 1 
 	
 	d_path(path, mount_name, 100);
+	writeUsedAtLeastOnce = 1;
 
 	return count;
 	
