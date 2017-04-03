@@ -128,6 +128,7 @@ ssize_t jiffies_read(struct file *filp, char __user *user_buf,
 
 int writeUsedAtLeastOnce = 0;
 char mount_name[100];
+char *mount_name_pointer;
 
 ssize_t mountderef_read(struct file *filp, char __user *user_buf,
 	size_t count, loff_t *f_pos)
@@ -153,6 +154,7 @@ ssize_t mountderef_write(struct file *filp, const char __user *user_buf,
 	int result;
 	int i;
 	char mountderef_buffer[100];
+	char mountname_tmp[100];
 	struct path *path = kmalloc(sizeof(struct path), GFP_KERNEL);
 		
 	for (i = 0; i< 100; i++)
@@ -162,16 +164,6 @@ ssize_t mountderef_write(struct file *filp, const char __user *user_buf,
 	if( _copy_from_user(mountderef_buffer, user_buf, count) != 0)
 		return -EFAULT;
 	
-
-	//get path structure from name
-	//Ponizszy kod jest zbugowany, podpowiem, ze problemem jest besposrednie podawanie
-	//wskaznika na obszar uzytkownika
-	/*if((result = user_path_at(0, user_buf, LOOKUP_ROOT | LOOKUP_EMPTY, path)) != 0) {
-		printk(KERN_WARNING "user_path failed");
-		//return -ENOENT;
-		return result;
-	}*/
-
 
 	if((result = kern_path(mountderef_buffer, LOOKUP_FOLLOW, path)) != 0) {
 		printk(KERN_WARNING "kern_path failed");
@@ -183,7 +175,8 @@ ssize_t mountderef_write(struct file *filp, const char __user *user_buf,
 	//follow up to mountpoint
 	follow_up(path); //to zwraca albo 0 jak jesteśmy w korzeniu, albo 1 
 	
-	d_path(path, mount_name, 100);
+	mount_name_pointer = d_path(path, mountname_tmp, 100);
+	strncpy(mount_name, mount_name_pointer, 100);
 	writeUsedAtLeastOnce = 1;
 
 	return count;
