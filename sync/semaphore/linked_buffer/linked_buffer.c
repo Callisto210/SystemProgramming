@@ -36,9 +36,12 @@ struct data {
 LIST_HEAD(buffer);
 size_t total_length;
 
+struct semaphore my_sem;
+
 static int __init linked_init(void)
 {
 	int result = 0;
+	sema_init(&my_sem, 1);
 
 	proc_entry = proc_create("linked", 0444, NULL, &proc_fops);
 	if (!proc_entry) {
@@ -147,6 +150,11 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 	ssize_t result = 0;
 	size_t i = 0;
 
+	if (down_interruptible(&my_sem)) {
+   		/* Interrupted... No semaphore acquired.. */
+   		return -EINTR;
+	}
+
 	printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n",
 		count, *f_pos);
 
@@ -176,6 +184,7 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 	}
 
 	write_count++;
+	up(&my_sem);
 	return count;
 
 err_contents:
