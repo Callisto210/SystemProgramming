@@ -15,6 +15,8 @@ MODULE_LICENSE("GPL");
 #define LINKED_MAJOR 199
 #define INTERNAL_SIZE 4
 
+DEFINE_MUTEX(my_mutex);
+
 const char * const proc_info = "reads: %zu\nwrites: %zu\ntotal length: %zu\n";
 
 size_t read_count;
@@ -147,6 +149,8 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 	ssize_t result = 0;
 	size_t i = 0;
 
+	mutex_lock(&my_mutex);
+
 	printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n",
 		count, *f_pos);
 
@@ -176,11 +180,13 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 	}
 
 	write_count++;
+	mutex_unlock(&my_mutex);
 	return count;
 
 err_contents:
 	kfree(data);
 err_data:
+	mutex_unlock(&my_mutex);
 	return result;
 }
 

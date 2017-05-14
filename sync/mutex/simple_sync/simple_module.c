@@ -10,6 +10,8 @@
 
 MODULE_LICENSE("GPL");
 
+DEFINE_MUTEX(my_mutex);
+
 const struct file_operations simple_fops;
 
 const int simple_major = 198;
@@ -48,6 +50,8 @@ ssize_t simple_read(struct file *filp, char __user *user_buf,
 
 	// 1. Prepare the text to send
 
+	mutex_lock(&my_mutex);
+
 	// Calculate the length
 	length_to_copy = msg_len - (msg_pos % msg_len);
 	if (length_to_copy > count)
@@ -73,6 +77,7 @@ ssize_t simple_read(struct file *filp, char __user *user_buf,
 
 cleanup:
 	kfree(local_buf);
+	mutex_unlock(&my_mutex);
 	return err;
 }
 
