@@ -48,21 +48,26 @@ ssize_t simple_read(struct file *filp, char __user *user_buf,
 
 	// 1. Prepare the text to send
 
+	rcu_read_lock();
+
 	// Calculate the length
 	length_to_copy = msg_len - (msg_pos % msg_len);
 	if (length_to_copy > count)
 		length_to_copy = count;
 
-	local_buf = kmalloc(length_to_copy, GFP_KERNEL);
+	local_buf = kmalloc(length_to_copy, GFP_ATOMIC);
 	if (!local_buf) {
 		err = -ENOMEM;
+		rcu_read_unlock();
 		goto cleanup;
 	}
 
 	for (i = 0; i < length_to_copy; i++) {
 		local_buf[i] = msg_str[(msg_pos++) % msg_len];
-		msleep(100);
 	}
+
+	rcu_read_unlock();
+	msleep(2300);
 
 	// 2. Send the text
 	err = copy_to_user(user_buf, local_buf, length_to_copy);

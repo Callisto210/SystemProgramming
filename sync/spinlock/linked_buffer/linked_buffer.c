@@ -168,6 +168,7 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 		data = kzalloc(sizeof(struct data), GFP_ATOMIC);
 		if (!data) {
 			result = -ENOMEM;
+			spin_unlock(&some_lock);
 			goto err_data;
 		}
 		data->length = to_copy;

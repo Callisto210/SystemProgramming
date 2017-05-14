@@ -146,35 +146,50 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 	struct data *data;
 	ssize_t result = 0;
 	size_t i = 0;
+	size_t j = 0;
+	char *tmp_buf = kmalloc(count, GFP_KERNEL);
+	
+	if (copy_from_user(tmp_buf, user_buf, count)) {
+			result = -EFAULT;
+			goto err_data;
+		}
 
 	printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n",
 		count, *f_pos);
 
+	rcu_read_lock();
+	
 	for (i = 0; i < count; i += INTERNAL_SIZE) {
 		size_t to_copy = min((size_t) INTERNAL_SIZE, count - i);
 
-		data = kzalloc(sizeof(struct data), GFP_KERNEL);
+		data = kzalloc(sizeof(struct data), GFP_ATOMIC);
 		if (!data) {
 			result = -ENOMEM;
+			rcu_read_unlock();
 			goto err_data;
 		}
 		data->length = to_copy;
-
-		if (copy_from_user(data->contents, user_buf + i, to_copy)) {
-			result = -EFAULT;
-			goto err_contents;
+		
+		for (j = 0; j < to_copy; j++) {
+			data->contents[j] = tmp_buf[i+j];
 		}
+		
 		if (strncmp(data->contents, "xxx&", 4) == 0) {
 			clean_list();
 			result = count;
+			rcu_read_unlock();
 			goto err_contents;
 		}
 		list_add_tail(&(data->list), &buffer);
 		total_length += to_copy;
 		*f_pos += to_copy;
+		
 		mdelay(10);
 	}
-
+	
+	rcu_read_unlock();
+	kfree(tmp_buf);
+	
 	write_count++;
 	return count;
 
