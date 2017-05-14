@@ -190,6 +190,7 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 err_contents:
 	kfree(data);
 err_data:
+	up(&my_sem);
 	return result;
 }
 
