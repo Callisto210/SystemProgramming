@@ -65,16 +65,15 @@ err:
 
 static void clean_list(void)
 {
-	struct list_head *cur;
-	struct list_head *tmp;
+	struct list_head *cur = &buffer;
 	struct data *data;
 
-	list_for_each_safe_rcu(cur, tmp, &buffer) {
-		data = list_entry(cur, struct data, list);
+	list_for_each_entry_rcu(cur, &buffer, list) {
+		data = list_entry_rcu(cur, struct data, list);
 		printk(KERN_DEBUG "linked: clearing <%*pE>\n",
 			INTERNAL_SIZE, data->contents);
 
-		list_del(&(data->list));
+		list_del_rcu(&(data->list));
 		kfree(data);
 	}
 	total_length = 0;
