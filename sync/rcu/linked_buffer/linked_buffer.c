@@ -69,7 +69,7 @@ static void clean_list(void)
 	struct list_head *tmp;
 	struct data *data;
 
-	list_for_each_safe(cur, tmp, &buffer) {
+	list_for_each_safe_rcu(cur, tmp, &buffer) {
 		data = list_entry(cur, struct data, list);
 		printk(KERN_DEBUG "linked: clearing <%*pE>\n",
 			INTERNAL_SIZE, data->contents);
@@ -180,7 +180,7 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 			rcu_read_unlock();
 			goto err_contents;
 		}
-		list_add_tail(&(data->list), &buffer);
+		list_add_tail_rcu(&(data->list), &buffer);
 		total_length += to_copy;
 		*f_pos += to_copy;
 		
