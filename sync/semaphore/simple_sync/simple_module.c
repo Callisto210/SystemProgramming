@@ -74,6 +74,7 @@ ssize_t simple_read(struct file *filp, char __user *user_buf,
 		msleep(100);
 	}
 	
+	up(&my_sem);
 
 	// 2. Send the text
 	err = copy_to_user(user_buf, local_buf, length_to_copy);
@@ -84,7 +85,6 @@ ssize_t simple_read(struct file *filp, char __user *user_buf,
 
 cleanup:
 	kfree(local_buf);
-	up(&my_sem); //Here, becouse up before kfree can give us memory leaks 
 	return err;
 }
 

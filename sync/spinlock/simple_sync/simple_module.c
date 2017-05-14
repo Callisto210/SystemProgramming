@@ -10,6 +10,8 @@
 
 MODULE_LICENSE("GPL");
 
+spinlock_t some_lock;
+
 const struct file_operations simple_fops;
 
 const int simple_major = 198;
@@ -28,6 +30,7 @@ static int __init simple_init(void)
 		return result;
 	}
 
+	spin_lock_init(&some_lock);
 	printk(KERN_INFO "SIMPLE: module has been inserted.\n");
 	return 0;
 }
@@ -48,22 +51,26 @@ ssize_t simple_read(struct file *filp, char __user *user_buf,
 
 	// 1. Prepare the text to send
 
+	spin_lock(&some_lock);
+	
 	// Calculate the length
 	length_to_copy = msg_len - (msg_pos % msg_len);
 	if (length_to_copy > count)
 		length_to_copy = count;
 
-	local_buf = kmalloc(length_to_copy, GFP_KERNEL);
+	local_buf = kmalloc(length_to_copy, GFP_ATOMIC);
 	if (!local_buf) {
 		err = -ENOMEM;
+		spin_unlock(&some_lock);
 		goto cleanup;
 	}
 
 	for (i = 0; i < length_to_copy; i++) {
 		local_buf[i] = msg_str[(msg_pos++) % msg_len];
-		msleep(100);
 	}
-
+	spin_unlock(&some_lock);
+	msleep(2300);
+	
 	// 2. Send the text
 	err = copy_to_user(user_buf, local_buf, length_to_copy);
 	if (err < 0)

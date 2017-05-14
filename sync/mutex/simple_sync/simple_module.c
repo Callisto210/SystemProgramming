@@ -60,6 +60,7 @@ ssize_t simple_read(struct file *filp, char __user *user_buf,
 	local_buf = kmalloc(length_to_copy, GFP_KERNEL);
 	if (!local_buf) {
 		err = -ENOMEM;
+		mutex_unlock(&my_mutex);
 		goto cleanup;
 	}
 
@@ -67,6 +68,8 @@ ssize_t simple_read(struct file *filp, char __user *user_buf,
 		local_buf[i] = msg_str[(msg_pos++) % msg_len];
 		msleep(100);
 	}
+	
+	mutex_unlock(&my_mutex);
 
 	// 2. Send the text
 	err = copy_to_user(user_buf, local_buf, length_to_copy);
@@ -77,7 +80,6 @@ ssize_t simple_read(struct file *filp, char __user *user_buf,
 
 cleanup:
 	kfree(local_buf);
-	mutex_unlock(&my_mutex);
 	return err;
 }
 

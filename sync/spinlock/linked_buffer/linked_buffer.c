@@ -12,6 +12,8 @@
 
 MODULE_LICENSE("GPL");
 
+spinlock_t some_lock;
+
 #define LINKED_MAJOR 199
 #define INTERNAL_SIZE 4
 
@@ -51,7 +53,8 @@ static int __init linked_init(void)
 		printk(KERN_WARNING "Cannot register the /dev/linked\n");
 		goto err;
 	}
-
+	
+	spin_lock_init(&some_lock);
 	printk(KERN_INFO "The linked module has been inserted.\n");
 	return result;
 
@@ -164,14 +167,20 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 			result = -EFAULT;
 			goto err_contents;
 		}
+		
+		spin_lock(&some_lock);
+		
 		if (strncmp(data->contents, "xxx&", 4) == 0) {
 			clean_list();
 			result = count;
+			spin_unlock(&some_lock);
 			goto err_contents;
 		}
 		list_add_tail(&(data->list), &buffer);
 		total_length += to_copy;
 		*f_pos += to_copy;
+		
+		spin_unlock(&some_lock);
 		mdelay(10);
 	}
 
