@@ -1,1 +1,1 @@
-Wszystko działa oprócz linked_list synchronizowanego za pomocą RCU (problemy z wywołaniami odpowiednich funkcji)
+Wszystko działa.

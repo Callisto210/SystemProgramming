@@ -151,10 +151,14 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 	size_t i = 0;
 	size_t j = 0;
 	char *tmp_buf = kmalloc(count, GFP_KERNEL);
+	if (!tmp_buf) {
+			result = -ENOMEM;
+			goto err_data;
+	}
 	
 	if (copy_from_user(tmp_buf, user_buf, count)) {
 			result = -EFAULT;
-			goto err_data;
+			goto err_tmp;
 		}
 
 	printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n",
@@ -169,7 +173,7 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 		if (!data) {
 			result = -ENOMEM;
 			spin_unlock(&some_lock);
-			goto err_data;
+			goto err_tmp;
 		}
 		data->length = to_copy;
 		
@@ -191,13 +195,14 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 	}
 	
 	spin_unlock(&some_lock);
-	kfree(tmp_buf);
 	
 	write_count++;
 	return count;
 
 err_contents:
 	kfree(data);
+err_tmp:
+	kfree(tmp_buf);
 err_data:
 	return result;
 }

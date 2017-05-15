@@ -9,8 +9,12 @@
 #include <linux/list.h>
 #include <linux/seq_file.h>
 #include <linux/delay.h>
+#include <linux/rcupdate.h>
+#include <linux/rculist.h>
 
 MODULE_LICENSE("GPL");
+
+spinlock_t some_lock;
 
 #define LINKED_MAJOR 199
 #define INTERNAL_SIZE 4
@@ -65,11 +69,9 @@ err:
 
 static void clean_list(void)
 {
-	struct list_head *cur = &buffer;
 	struct data *data;
 
-	list_for_each_entry_rcu(cur, &buffer, list) {
-		data = list_entry_rcu(cur, struct data, list);
+	list_for_each_entry_rcu(data, &buffer, list) {
 		printk(KERN_DEBUG "linked: clearing <%*pE>\n",
 			INTERNAL_SIZE, data->contents);
 
@@ -97,17 +99,27 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 	size_t pos = 0;
 	size_t copied = 0;
 	size_t real_length = 0;
+	size_t j = 0;
+	
+	char *tmp_buf = kmalloc(count, GFP_KERNEL);
+	if (!tmp_buf) {
+			return -ENOMEM;
+	}
 
 	printk(KERN_WARNING "linked: read, count=%zu f_pos=%lld\n",
 		count, *f_pos);
 
-	if (*f_pos > total_length)
+	if (*f_pos > total_length) {
+		kfree(tmp_buf);
 		return 0;
+	}
 
 	if (list_empty(&buffer))
 		printk(KERN_DEBUG "linked: empty list\n");
 
-	list_for_each_entry(data, &buffer, list) {
+	rcu_read_lock();
+	
+	list_for_each_entry_rcu(data, &buffer, list) {
 		size_t to_copy = min(data->length, count - copied);
 
 		printk(KERN_DEBUG "linked: elem=[%zd]<%*pE>\n",
@@ -120,11 +132,10 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 		}
 
 		// We are in the correct entry
-
-		if (copy_to_user(user_buf + copied, data->contents, to_copy)) {
-			printk(KERN_WARNING "linked: could not copy data to user\n");
-			return -EFAULT;
+		for (j = 0; j < to_copy; j++) {
+			tmp_buf[copied+j] = data->contents[j];
 		}
+
 		copied += to_copy;
 		pos += to_copy;
 		real_length += data->length;
@@ -132,10 +143,19 @@ ssize_t linked_read(struct file *filp, char __user *user_buf,
 		if (copied >= count)
 			break;
 	}
+	rcu_read_unlock();
+	
+	if (copy_to_user(user_buf, tmp_buf, copied)) {
+			printk(KERN_WARNING "linked: could not copy data to user\n");
+			kfree(tmp_buf);
+			return -EFAULT;
+	}
+	
 	printk(KERN_WARNING "linked: copied=%zd real_length=%zd\n",
 		copied, real_length);
 	*f_pos += real_length;
 	read_count++;
+	kfree(tmp_buf);
 	return copied;
 }
 
@@ -147,16 +167,20 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 	size_t i = 0;
 	size_t j = 0;
 	char *tmp_buf = kmalloc(count, GFP_KERNEL);
+	if (!tmp_buf) {
+			result = -ENOMEM;
+			goto err_data;
+	}
 	
 	if (copy_from_user(tmp_buf, user_buf, count)) {
 			result = -EFAULT;
-			goto err_data;
+			goto err_tmp;
 		}
 
 	printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n",
 		count, *f_pos);
 
-	rcu_read_lock();
+	spin_lock(&some_lock);
 	
 	for (i = 0; i < count; i += INTERNAL_SIZE) {
 		size_t to_copy = min((size_t) INTERNAL_SIZE, count - i);
@@ -164,8 +188,8 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 		data = kzalloc(sizeof(struct data), GFP_ATOMIC);
 		if (!data) {
 			result = -ENOMEM;
-			rcu_read_unlock();
-			goto err_data;
+			spin_unlock(&some_lock);
+			goto err_tmp;
 		}
 		data->length = to_copy;
 		
@@ -176,7 +200,7 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 		if (strncmp(data->contents, "xxx&", 4) == 0) {
 			clean_list();
 			result = count;
-			rcu_read_unlock();
+			spin_unlock(&some_lock);
 			goto err_contents;
 		}
 		list_add_tail_rcu(&(data->list), &buffer);
@@ -186,14 +210,16 @@ ssize_t linked_write(struct file *filp, const char __user *user_buf,
 		mdelay(10);
 	}
 	
-	rcu_read_unlock();
-	kfree(tmp_buf);
+	spin_unlock(&some_lock);
+	synchronize_rcu();
 	
 	write_count++;
 	return count;
-
+	
 err_contents:
 	kfree(data);
+err_tmp:
+	kfree(tmp_buf);
 err_data:
 	return result;
 }
